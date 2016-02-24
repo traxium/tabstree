@@ -26,6 +26,11 @@
 	padding-left: 1px !important;
 }
 
+#identity-box {
+	padding-top:0;
+	padding-bottom:0;
+}
+
 /* 32px fix in order to not crop the back button with a selected tab */
 
 .tab-background-start[visuallyselected=true]::after,

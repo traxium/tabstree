@@ -12,3 +12,8 @@
 #back-button {
 	padding-left: 4px !important;
 }
+
+#identity-box {
+	padding-top:0;
+	padding-bottom:0;
+}

@@ -25,3 +25,8 @@
 #back-button {
 	padding-left: 2px !important;
 }
+
+#identity-box {
+	padding-top:0;
+	padding-bottom:0;
+}
