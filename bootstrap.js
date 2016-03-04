@@ -11,7 +11,7 @@
 const Cc = Components.classes;
 const Ci = Components.interfaces;
 const Cu = Components.utils;
-
+ 
 Cu.import("resource://gre/modules/Services.jsm");
 Cu.import("resource://gre/modules/ShortcutUtils.jsm");
 Cu.import("resource:///modules/CustomizableUI.jsm");
@@ -24,7 +24,6 @@ var stringBundle = Services.strings.createBundle('chrome://tabtree/locale/global
 var prefsObserver;
 var defaultThemeAddonListener;
 var tabHeightGlobal = {value: -1, uri: null};
-var tabNumbers = false;
 
 const TT_POS_LEFT = 0;
 const TT_POS_RIGHT = 1;
@@ -112,7 +111,7 @@ function startup(data, reason)
 	Services.prefs.getDefaultBranch(null).setBoolPref('extensions.tabtree.dblclick', false); // setting default pref
 	Services.prefs.getDefaultBranch(null).setIntPref('extensions.tabtree.middle-click-tabbar', false); // #36 (Middle click on empty space to open a new tab)
 	Services.prefs.getDefaultBranch(null).setIntPref('extensions.tabtree.delay', 0); // setting default pref
-	Services.prefs.getDefaultBranch(null).setIntPref('extensions.tabtree.position', 1); // setting default pref // 0 - Left, 1 - Right
+	Services.prefs.getDefaultBranch(null).setIntPref('extensions.tabtree.position', 0); // setting default pref // 0 - Left, 1 - Right
 	// 0 - Top, 1 - Bottom (before "New tab" button), 2 - Bottom (after "New tab" button):
 	Services.prefs.getDefaultBranch(null).setIntPref('extensions.tabtree.search-position', 0);
 	Services.prefs.getDefaultBranch(null).setBoolPref('extensions.tabtree.search-autohide', false); // setting default pref
@@ -129,27 +128,27 @@ function startup(data, reason)
 	Services.prefs.getDefaultBranch(null).setIntPref('extensions.tabtree.wheel', 0);
 	Services.prefs.getDefaultBranch(null).setBoolPref('extensions.tabtree.search-jump', false); // jump to the first search match
 	Services.prefs.getDefaultBranch(null).setIntPref('extensions.tabtree.search-jump-min-chars', 4); // min chars to jump
+	Services.prefs.getDefaultBranch(null).setBoolPref('extensions.tabtree.fullscreen-show', false); // #18 hold the tab tree in full screen mode
+	Services.prefs.getDefaultBranch(null).setBoolPref('extensions.tabtree.hide-tabtree-with-one-tab', true); // #31
 	Services.prefs.getDefaultBranch(null).setBoolPref('extensions.tabtree.insertRelatedAfterCurrent', false); // #19 // false - Bottom, true - Top
 	// 0 - default, 1 - try to mimic Firefox theme, 2 - dark
 	Services.prefs.getDefaultBranch(null).setIntPref('extensions.tabtree.theme', 1); // #35 #50
 	Services.prefs.getDefaultBranch(null).setBoolPref('extensions.tabtree.prefix-context-menu-items', false); // #60 (Garbage in menu items)
 	Services.prefs.getDefaultBranch(null).setIntPref('extensions.tabtree.tab-height', -1); // #67 [Feature] Provide a way to change the items height
 	Services.prefs.getDefaultBranch(null).setBoolPref('extensions.tabtree.tab-flip', true);
-	Services.prefs.getDefaultBranch(null).setBoolPref('extensions.tabtree.auto-hide-when-fullscreen', true); // #18 hold the tab tree in full screen mode
-	Services.prefs.getDefaultBranch(null).setBoolPref('extensions.tabtree.auto-hide-when-maximized', false); // #40 #80
-	Services.prefs.getDefaultBranch(null).setBoolPref('extensions.tabtree.auto-hide-when-normal', false); // #40 #80
-	Services.prefs.getDefaultBranch(null).setBoolPref('extensions.tabtree.auto-hide-when-only-one-tab', true); // #31
-	Services.prefs.getDefaultBranch(null).setBoolPref('extensions.tabtree.tab-numbers', false); // #90 (Show tab numbers in tab titles) 
 
 	// migration code :
 	try {
-		Services.prefs.setBoolPref("extensions.tabtree.auto-hide-when-fullscreen", !Services.prefs.getBoolPref("extensions.tabtree.fullscreen-show"));
-		Services.prefs.deleteBranch("extensions.tabtree.fullscreen-show");
-		Services.prefs.setBoolPref("extensions.tabtree.auto-hide-when-only-one-tab", Services.prefs.getBoolPref("extensions.tabtree.hide-tabtree-with-one-tab"));
-		Services.prefs.deleteBranch("extensions.tabtree.hide-tabtree-with-one-tab");
+		// 0 - default, 1 - flst
+		if (Services.prefs.getBoolPref("extensions.tabtree.flst")) {
+			Services.prefs.setIntPref("extensions.tabtree.after-close", 1);
+		} else {
+			Services.prefs.setIntPref("extensions.tabtree.after-close", 0);
+		}
+		Services.prefs.deleteBranch("extensions.tabtree.flst");
 	} catch (e) {
 	}
-	// - end migration code // don't forget to delete when v1.4.4 or older aren't in use anymore
+	// - end migration code // don't forget to delete when v1.4.1b or older aren't in use anymore
 
 	let uriTabsToolbar = Services.io.newURI("chrome://tabtree/skin/tt-TabsToolbar.css", null, null);
 	if (!Services.prefs.getBoolPref('extensions.tabtree.show-default-tabs')) {
@@ -1153,7 +1152,7 @@ var windowListener = {
 					g.moveTabToEnd();
 				}
 				tree.treeBoxObject.invalidate();
-			} else if (keyboardEvent.ctrlKey && keyboardEvent.shiftKey && keyboardEvent.code === "Comma") {
+			} else if (keyboardEvent.ctrlKey && keyboardEvent.shiftKey && keyboardEvent.key === "ArrowLeft") {
 				// #68 Decrease tab indentation one level:
 				// Ctrl+Alt+Left/Right is already used on OS X — we can't use it
 				let lvl = parseInt(ss.getTabValue(g.mCurrentTab, "ttLevel"));
@@ -1165,7 +1164,7 @@ var windowListener = {
 				tree.treeBoxObject.invalidate();
 				// - we can't use `tree.treeBoxObject.invalidateRow(g.mCurrentTab._tPos - g._numPinnedTabs);`
 				// because in some cases we also have to redraw nesting lines at least on the previous and the next tab
-			} else if (keyboardEvent.ctrlKey && keyboardEvent.shiftKey && keyboardEvent.code === "Period") {
+			} else if (keyboardEvent.ctrlKey && keyboardEvent.shiftKey && keyboardEvent.key === "ArrowRight") {
 				// #68 Increase tab indentation one level:
 				// Ctrl+Alt+Left/Right is already used on OS X — we can't use it
 				let lvl = parseInt(ss.getTabValue(g.mCurrentTab, "ttLevel"));
@@ -1174,38 +1173,6 @@ var windowListener = {
 				tree.treeBoxObject.invalidate();
 				// - we can't use `tree.treeBoxObject.invalidateRow(g.mCurrentTab._tPos - g._numPinnedTabs);`
 				// because in some cases we also have to redraw nesting lines at least on the previous and the next tab
-			} else if (keyboardEvent.key === "F8") {
-				// #40 #80 F8 toggles 4 auto-hide options:
-				// 1. in fullscreen
-				// 2. in maximized windows
-				// 3. in normal windows
-				// 4. when only one tab
-				if (g.tabs.length <= 1) {
-					if (Services.prefs.getBoolPref("extensions.tabtree.auto-hide-when-only-one-tab")) {
-						Services.prefs.setBoolPref("extensions.tabtree.auto-hide-when-only-one-tab", false);
-						if (aDOMWindow.windowState === aDOMWindow.STATE_MAXIMIZED && Services.prefs.getBoolPref("extensions.tabtree.auto-hide-when-maximized")) {
-							Services.prefs.setBoolPref("extensions.tabtree.auto-hide-when-maximized", false);
-						} else if (aDOMWindow.windowState === aDOMWindow.STATE_NORMAL && Services.prefs.getBoolPref("extensions.tabtree.auto-hide-when-normal")) {
-							Services.prefs.setBoolPref("extensions.tabtree.auto-hide-when-normal", false);
-						} else if (aDOMWindow.windowState === aDOMWindow.STATE_FULLSCREEN && Services.prefs.getBoolPref("extensions.tabtree.auto-hide-when-fullscreen")) {
-							Services.prefs.setBoolPref("extensions.tabtree.auto-hide-when-fullscreen", false);
-						}
-					} else {
-						Services.prefs.setBoolPref("extensions.tabtree.auto-hide-when-only-one-tab", true);
-					}
-				} else {
-					switch (aDOMWindow.windowState) {
-					case aDOMWindow.STATE_MAXIMIZED: // === 1
-						Services.prefs.setBoolPref("extensions.tabtree.auto-hide-when-maximized", !Services.prefs.getBoolPref("extensions.tabtree.auto-hide-when-maximized"));
-						break;
-					case aDOMWindow.STATE_NORMAL: // === 3
-						Services.prefs.setBoolPref("extensions.tabtree.auto-hide-when-normal", !Services.prefs.getBoolPref("extensions.tabtree.auto-hide-when-normal"));
-						break;
-					case aDOMWindow.STATE_FULLSCREEN: // === 4
-						Services.prefs.setBoolPref("extensions.tabtree.auto-hide-when-fullscreen", !Services.prefs.getBoolPref("extensions.tabtree.auto-hide-when-fullscreen"));
-						break;
-					}
-				}
 			}
 		}), false);
 
@@ -1578,26 +1545,9 @@ var windowListener = {
 					}
 				}
 			},
-			
-			duplicateTab: function (tab, lvl, posTo) {
-				// `gBrowser.duplicateTab()` is asynchronous and uses SS to do the work
-				// so we have to wait a bit to ensure "ttLevel" is correct:
-				let newTab = g.duplicateTab(tab);
-				newTab.addEventListener("SSTabRestoring", function onSSTabRestoring(event) {
-					newTab.removeEventListener("SSTabRestoring", onSSTabRestoring, false);
-					
-					if (posTo) {
-						g.moveTabTo(newTab, posTo);
-					}
-					ss.setTabValue(newTab, "ttLevel", lvl.toString());
-					g.selectedTab = newTab;
-					tree.treeBoxObject.invalidate();
-				}, false);
-			},
 		}; // let tt =
 
 		treechildren.addEventListener('dragstart', function(event) { // if the event was attached to 'tree' then the popup would be shown while you scrolling
-			event.dataTransfer.effectAllowed = "copyMove";
 			let tab = g.tabs[tree.currentIndex+tt.nPinned];
 			event.dataTransfer.mozSetDataAt(aDOMWindow.TAB_DROP_TYPE, tab, 0);
 			// "We must not set text/x-moz-url or text/plain data here,"
@@ -1712,29 +1662,9 @@ var windowListener = {
 			}
 		}, false);
 
-		// #71 Feature request: Import tree structure from TST on first run
-		// If it's the first run and there was TST installed before
-		if (ss.getTabValue(g.tabs[0], "ttLevel") === "" && ss.getTabValue(g.tabs[0], "treestyletab-id")) {
-			let tabsByTSTId = {};
-			for (let tab of g.tabs) {
-				tabsByTSTId[ss.getTabValue(tab, "treestyletab-id")] = tab;
-			}
-			let getTSTLvl  = (tab) => {
-				let parentId = ss.getTabValue(tab, "treestyletab-parent");
-				if (parentId) {
-					return getTSTLvl(tabsByTSTId[parentId]) + 1;
-				} else {
-					return 0;
-				}
-			};
-			for (let tab of g.tabs) {
-				ss.setTabValue(tab, "ttLevel", getTSTLvl(tab).toString());
-			}
-		} else {
-			for (let tab of g.tabs) {
-				if (ss.getTabValue(tab, "ttLevel") === "") {
-					ss.setTabValue(tab, "ttLevel", "0");
-				}
+		for (let i=0; i<g.tabs.length; ++i) {
+			if ( ss.getTabValue(g.tabs[i], 'ttLevel') === '' ) {
+				ss.setTabValue(g.tabs[i], 'ttLevel', '0');
 			}
 		}
 
@@ -1907,9 +1837,7 @@ var windowListener = {
 					return ''; // If a column consists only of an image, then the empty string is returned.
 				}
 				let tPos = row+tt.nPinned;
-				return (tabNumbers ? `(${row + g._numPinnedTabs + 1}) ` : " ") + g.tabs[tPos].label;
-				// tabNumbers === Services.prefs.getBoolPref("extensions.tabtree.tab-numbers")
-				// the pref is cached for better performance
+				return ' ' + g.tabs[tPos].label;
 			},
 			getImageSrc: function(row, column) {
 				if (column.index !== TT_COL_TITLE) {
@@ -2098,20 +2026,9 @@ var windowListener = {
 				
 				if (draggedTab && dropEffect == "copy") {
 					// copy the dropped tab (wherever it's from)
-					// #39 Ctrl+drag to duplicate tab
-					// It duplicates only one tab despite a drag feedback that can represent a subtree
-					let newTab = g.duplicateTab(draggedTab);
-					// `duplicateTab()` is asynchronous and uses SS to do the work
-					// so we have to wait before moving a tab to ensure that "ttLevel" is correct:
-					let shift = aDOMWindow.tt.dropEvent.shiftKey;
-					newTab.addEventListener("SSTabRestoring", function onSSTabRestoring(event) {
-						newTab.removeEventListener("SSTabRestoring", onSSTabRestoring, false);
-						tt.moveTabToPlus(newTab, tPosTo, orientation);
-						if (shift) {
-							g.tabContainer.selectedItem = newTab;
-						}
-						tree.treeBoxObject.invalidate();
-					}, false);
+					
+					// here will be #39 ([Bug]Ctrl+drag to duplicate tab)
+					
 				}  else if (draggedTab && draggedTab.parentNode == g.tabContainer) {
 					// Here moving tab/tabs in one window
 					if (tt.hasAnyChildren(draggedTab._tPos)) {
@@ -2219,7 +2136,6 @@ var windowListener = {
 		}); // don't forget to restore
 
 		toolbar.addEventListener('dragstart', function(event) {
-			event.dataTransfer.effectAllowed = "copyMove";
 			let toolbarbtn = event.originalTarget;
 			let tPos = toolbarbtn.tPos; // See bindings.xml
 			let tab = g.tabs[tPos];
@@ -2299,22 +2215,9 @@ var windowListener = {
 			
 			if (draggedTab && dropEffect == "copy") {
 				// copy the dropped tab (wherever it's from)
-				// #39 Ctrl+drag to duplicate tab
-				// It duplicates only one tab despite a drag feedback that can represent a subtree
-				let newTab = g.duplicateTab(draggedTab);
-				// `duplicateTab()` is asynchronous and uses SS to do the work
-				// so we have to wait before moving a tab to ensure that "ttLevel" is correct:
-				let shift = event.shiftKey;
-				newTab.addEventListener("SSTabRestoring", function onSSTabRestoring(event) {
-					newTab.removeEventListener("SSTabRestoring", onSSTabRestoring, false);
-					g.pinTab(newTab);
-					tt.movePinnedToPlus(newTab, newIndex, orientation);
-					if (shift) {
-						g.tabContainer.selectedItem = newTab;
-					}
-					tree.treeBoxObject.invalidate();
-					tt.redrawToolbarbuttons();
-				}, false);
+				
+				// here will be #39 ([Bug]Ctrl+drag to duplicate tab)
+				
 			}  else if (draggedTab && draggedTab.parentNode == g.tabContainer) {
 				// Here dropping a tab from the same window
 				g.pinTab(draggedTab);
@@ -2389,7 +2292,6 @@ var windowListener = {
 				
 				if (aPopupMenu.triggerNode.localName == 'treechildren') {
 					let tPos = tree.currentIndex + tt.nPinned;
-					aDOMWindow.document.popupNode = g.tabs[tPos]; // Fixes #84 TabTree removes custom entries from tab context menu
 					// we use 'Object.defineProperty' because aPopupMenu.triggerNode is not a writable property, plain 'aPopupMenu.triggerNode = blaBlaBla' doesn't work
 					// and furthermore it's an inherited getter property:
 					Object.defineProperty(aPopupMenu, 'triggerNode', {
@@ -2402,7 +2304,6 @@ var windowListener = {
 					delete aPopupMenu.triggerNode; // because it was an inherited property we can delete it to restore default value
 				} else if (aPopupMenu.triggerNode.localName == 'ttpinnedtab') {
 					let tPos = aPopupMenu.triggerNode.tPos;
-					aDOMWindow.document.popupNode = g.tabs[tPos]; // Fixes #84 TabTree removes custom entries from tab context menu
 					// we use 'Object.defineProperty' because aPopupMenu.triggerNode is not a writable property, plain 'aPopupMenu.triggerNode = blaBlaBla' doesn't work
 					// and furthermore it's an inherited getter property:
 					Object.defineProperty(aPopupMenu, 'triggerNode', {
@@ -2650,6 +2551,25 @@ var windowListener = {
 			aDOMWindow.BrowserOpenNewTabOrWindow(event);
 		}, false);
         
+		newTab.addEventListener("mouseup", function (event) {
+			if(event.button === 1){
+				let tab = g.mCurrentTab;
+				let tPos = tab._tPos;
+				let lvl = ss.getTabValue(tab, "ttLevel");
+				let newTab = g.addTab("about:newtab"); // our new tab will be opened at position g.tabs.length - 1
+				for (let i = tPos + 1; i < g.tabs.length - 1; ++i) {
+					if (parseInt(ss.getTabValue(g.tabs[i], "ttLevel")) <= parseInt(lvl)) {
+						g.moveTabTo(newTab, i);
+						break;
+					}
+				}
+				ss.setTabValue(newTab, "ttLevel", lvl);
+				g.selectedTab = newTab;
+			}
+		}, false);
+		
+		
+		
 		g.tabContainer.addEventListener("TabMove", (aDOMWindow.tt.toRemove.eventListeners.onTabMove = function(event) {
 			let tab = event.target;
 			tab.pinned ? tree.view.selection.clearSelection() : tree.view.selection.select(tab._tPos - tt.nPinned);
@@ -2846,48 +2766,9 @@ var windowListener = {
 			ss.setTabValue(newTab, "ttLevel", (parseInt(lvl) + 1).toString());
 			g.selectedTab = newTab;
 		}, false);
-		
-		let menuItemDuplicateTabAsSibling = aDOMWindow.document.createElement("menuitem"); // removed in unloadFromWindow()
-		menuItemDuplicateTabAsSibling.id = "tt-content-duplicate-Sibling";
-		//menuItemDuplicateTabAsSibling.setAttribute("label", stringBundle.GetStringFromName("duplicate_sibling"));
-		menuItemDuplicateTabAsSibling.addEventListener("command", function (event) {
-			let tab = aDOMWindow.TabContextMenu.contextTab;
-			let tPos = tab._tPos;
-			let lvl = ss.getTabValue(tab, "ttLevel");
-			for (let i = tPos + 1; i < g.tabs.length - 1; ++i) {
-				if (parseInt(ss.getTabValue(g.tabs[i], "ttLevel")) <= parseInt(lvl)) {
-					tt.duplicateTab(tab, lvl, i);
-					break;
-				}
-			}
-		}, false);
-		
-		let menuItemDuplicateTabAsChild = aDOMWindow.document.createElement("menuitem"); // removed in unloadFromWindow()
-		menuItemDuplicateTabAsChild.id = "tt-content-open-child";
-		//menuItemDuplicateTabAsChild.setAttribute("label", stringBundle.GetStringFromName("duplicate_child"));
-		menuItemDuplicateTabAsChild.addEventListener("command", function (event) {
-			let tab = aDOMWindow.TabContextMenu.contextTab;
-			let lvl = ss.getTabValue(tab, "ttLevel");
-			if (Services.prefs.getBoolPref("extensions.tabtree.insertRelatedAfterCurrent")) {
-				tt.duplicateTab(tab, parseInt(lvl) + 1, tab._tPos + 1);
-			} else {
-				tt.duplicateTab(tab, parseInt(lvl) + 1, tt.lastDescendantPos(tab) + 1);
-			}
-		}, false);
-		
-		let menuItemDuplicateTabToBottom = aDOMWindow.document.createElement("menuitem"); // removed in unloadFromWindow()
-		menuItemDuplicateTabToBottom.id = "tt-content-open-child";
-		//menuItemDuplicateTabToBottom.setAttribute("label", stringBundle.GetStringFromName("duplicate_bottom"));
-		menuItemDuplicateTabToBottom.addEventListener("command", function (event) {
-			let tab = aDOMWindow.TabContextMenu.contextTab;
-			tt.duplicateTab(tab, 0);
-		}, false);
 
 		let tabContextMenu = aDOMWindow.document.querySelector('#tabContextMenu');
 		let tabContextMenuCloseTab = aDOMWindow.document.querySelector('#context_closeTab');
-		tabContextMenu.insertBefore(menuItemDuplicateTabToBottom, tabContextMenuCloseTab.nextSibling);
-		tabContextMenu.insertBefore(menuItemDuplicateTabAsChild, tabContextMenuCloseTab.nextSibling);
-		tabContextMenu.insertBefore(menuItemDuplicateTabAsSibling, tabContextMenuCloseTab.nextSibling);
 		tabContextMenu.insertBefore(menuItemOpenNewTabChild, tabContextMenuCloseTab.nextSibling);
 		tabContextMenu.insertBefore(menuItemOpenNewTabSibling, tabContextMenuCloseTab.nextSibling);
 		tabContextMenu.insertBefore(menuItemCloseChildren, tabContextMenuCloseTab.nextSibling);
@@ -2899,8 +2780,6 @@ var windowListener = {
 			menuItemOpenNewTabChild.hidden = tab.pinned;
 			menuItemOpenNewTabSibling.hidden = tab._tPos < tt.nPinned - 1;
 			
-			menuItemDuplicateTabAsChild.hidden = tab.pinned;
-			
 			g.mCurrentTab.pinned ? tree.view.selection.clearSelection() : tree.view.selection.select(g.mCurrentTab._tPos - g._numPinnedTabs);
 		}), false); // removed in unloadFromWindow()
 		//////////////////// END TAB CONTEXT MENU //////////////////////////////////////////////////////////////////////
@@ -2910,38 +2789,6 @@ var windowListener = {
 			observe: function(subject, topic, data) {
 				if (topic == 'nsPref:changed') {
 					switch (data) {
-						case "extensions.tabtree.auto-hide-when-fullscreen":
-							if (Services.prefs.getBoolPref("extensions.tabtree.auto-hide-when-fullscreen")) {
-								splitter.removeAttribute('fullscreen-show');
-								sidebar.removeAttribute('fullscreen-show');
-								fullscrToggler.removeAttribute('style');
-							} else {
-								splitter.setAttribute('fullscreen-show', 'true');
-								sidebar.setAttribute('fullscreen-show', 'true');
-								fullscrToggler.style.visibility = 'collapse';
-							}
-						break;
-						case "extensions.tabtree.auto-hide-when-maximized":
-							if (Services.prefs.getBoolPref("extensions.tabtree.auto-hide-when-maximized")) {
-								aDOMWindow.document.documentElement.setAttribute("tt-auto-hide-when-maximized", "true");
-							} else {
-								aDOMWindow.document.documentElement.removeAttribute("tt-auto-hide-when-maximized");
-							}
-						break;
-						case "extensions.tabtree.auto-hide-when-normal":
-							if (Services.prefs.getBoolPref("extensions.tabtree.auto-hide-when-normal")) {
-								aDOMWindow.document.documentElement.setAttribute("tt-auto-hide-when-normal", "true");
-							} else {
-								aDOMWindow.document.documentElement.removeAttribute("tt-auto-hide-when-normal");
-							}
-						break;
-						case "extensions.tabtree.auto-hide-when-only-one-tab":
-							if (Services.prefs.getBoolPref("extensions.tabtree.auto-hide-when-only-one-tab")) {
-								aDOMWindow.document.documentElement.setAttribute("tt-auto-hide-when-only-one-tab", "true");
-							} else {
-								aDOMWindow.document.documentElement.removeAttribute("tt-auto-hide-when-only-one-tab");
-							}
-						break;
 						case 'browser.tabs.drawInTitlebar':
 							if (Services.appinfo.OS == 'WINNT') {
 								if (Services.prefs.getBoolPref('browser.tabs.drawInTitlebar') && aDOMWindow.windowState == aDOMWindow.STATE_MAXIMIZED
@@ -2985,6 +2832,24 @@ var windowListener = {
 								tree.addEventListener('click', onClickFast, false);
 							}
 							break;
+						case 'extensions.tabtree.fullscreen-show':
+							if (Services.prefs.getBoolPref('extensions.tabtree.fullscreen-show')) {
+								splitter.setAttribute('fullscreen-show', 'true');
+								sidebar.setAttribute('fullscreen-show', 'true');
+								fullscrToggler.style.visibility = 'collapse';
+							} else {
+								splitter.removeAttribute('fullscreen-show');
+								sidebar.removeAttribute('fullscreen-show');
+								fullscrToggler.removeAttribute('style');
+							}
+							break;
+						case 'extensions.tabtree.hide-tabtree-with-one-tab':
+							if (Services.prefs.getBoolPref('extensions.tabtree.hide-tabtree-with-one-tab')) {
+								sidebar.collapsed = splitter.collapsed = fullscrToggler.collapsed = g.tabs.length <= 1;
+							} else {
+								sidebar.collapsed = splitter.collapsed = fullscrToggler.collapsed = false;
+							}
+							break;
 						case 'extensions.tabtree.highlight-unloaded-tabs':
 							prefPending = Services.prefs.getIntPref('extensions.tabtree.highlight-unloaded-tabs');
 							tree.treeBoxObject.invalidate();
@@ -3007,9 +2872,6 @@ var windowListener = {
 							menuItemCloseChildren.setAttribute("label", prefix + stringBundle.GetStringFromName("close_children"));
 							menuItemOpenNewTabSibling.setAttribute("label", prefix + stringBundle.GetStringFromName("open_sibling"));
 							menuItemOpenNewTabChild.setAttribute("label", prefix + stringBundle.GetStringFromName("open_child"));
-							menuItemDuplicateTabAsSibling.setAttribute("label", prefix + stringBundle.GetStringFromName("duplicate_sibling"));
-							menuItemDuplicateTabAsChild.setAttribute("label", prefix + stringBundle.GetStringFromName("duplicate_child"));
-							menuItemDuplicateTabToBottom.setAttribute("label", prefix + stringBundle.GetStringFromName("duplicate_bottom"));
 							break;
 						case 'extensions.tabtree.new-tab-button':
 							newTab.collapsed = !Services.prefs.getBoolPref('extensions.tabtree.new-tab-button');
@@ -3058,10 +2920,6 @@ var windowListener = {
 							tree.style.borderStyle = redrawHack;
 							tree.treeBoxObject.invalidate();
 							break;
-						case "extensions.tabtree.tab-numbers":
-							tabNumbers = Services.prefs.getBoolPref("extensions.tabtree.tab-numbers");
-							tree.treeBoxObject.invalidate();
-						break;
 						case 'extensions.tabtree.treelines':
 							tree.setAttribute('treelines', Services.prefs.getBoolPref('extensions.tabtree.treelines').toString());
 							dragFeedbackTree.setAttribute('treelines', Services.prefs.getBoolPref('extensions.tabtree.treelines').toString());
@@ -3074,13 +2932,9 @@ var windowListener = {
 				}
 			}
 		}), false); // don't forget to remove // it can be removed in 'onCloseWindow' or in 'unloadFromWindow'(upon addon shutdown)
-		aDOMWindow.tt.toRemove.prefsObserver.observe(null, "nsPref:changed", "extensions.tabtree.auto-hide-when-fullscreen");
-		aDOMWindow.tt.toRemove.prefsObserver.observe(null, "nsPref:changed", "extensions.tabtree.auto-hide-when-maximized");
-		aDOMWindow.tt.toRemove.prefsObserver.observe(null, "nsPref:changed", "extensions.tabtree.auto-hide-when-normal");
-		aDOMWindow.tt.toRemove.prefsObserver.observe(null, "nsPref:changed", "extensions.tabtree.auto-hide-when-only-one-tab");
+		aDOMWindow.tt.toRemove.prefsObserver.observe(null, 'nsPref:changed', 'extensions.tabtree.fullscreen-show');
 		aDOMWindow.tt.toRemove.prefsObserver.observe(null, 'nsPref:changed', 'extensions.tabtree.prefix-context-menu-items');
 		aDOMWindow.tt.toRemove.prefsObserver.observe(null, "nsPref:changed", "extensions.tabtree.tab-height");
-		aDOMWindow.tt.toRemove.prefsObserver.observe(null, "nsPref:changed", "extensions.tabtree.tab-numbers");
 
 		tt.redrawToolbarbuttons(); // needed when addon is enabled from about:addons (not when firefox is being loaded)
 		tree.treeBoxObject.invalidate(); // just in case
@@ -3148,15 +3002,11 @@ var windowListener = {
 			}
 		})).observe(sidebar, {attributes: true}); // removed in unloadFromWindow()
 
+		sidebar.collapsed = splitter.collapsed = fullscrToggler.collapsed = g.tabs.length <= 1 && Services.prefs.getBoolPref("extensions.tabtree.hide-tabtree-with-one-tab");
 		(aDOMWindow.tt.toRemove.numberOfTabsObserver = new aDOMWindow.MutationObserver(function(aMutations) {
-			// if there's only one tab then set attr that helps to hide the tab tree
-			if (g.tabs.length <= 1) {
-				aDOMWindow.document.documentElement.setAttribute("tt-only-one-tab", "true");
-			} else {
-				aDOMWindow.document.documentElement.removeAttribute("tt-only-one-tab");
-			}
+			// if there's only one tab then hide the tab bar
+			sidebar.collapsed = splitter.collapsed = fullscrToggler.collapsed = g.tabs.length <= 1 && Services.prefs.getBoolPref("extensions.tabtree.hide-tabtree-with-one-tab");
 		})).observe(g.tabContainer, {childList: true}); // removed in unloadFromWindow()
-		aDOMWindow.tt.toRemove.numberOfTabsObserver.mutationCallback(); // call it once like we always do for initialization purposes
 
 		// OS X tabs not in titlebar fix
 		// And tab search box styling:
