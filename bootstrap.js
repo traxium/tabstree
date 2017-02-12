@@ -1892,7 +1892,9 @@ var windowListener = {
 					// But I can't see the difference with the naked eye
 				}
 				
-				if (argumentsList.length>=2 && (argumentsList[1].referrerURI || fromVimFx)) { // undo close tab hasn't got argumentsList[1]
+				 // undo close tab hasn't got argumentsList[1]
+				 // #145 : when opening with Snap Link Plus, 'referrerURI' not present but 'spec' is.  
+				if (argumentsList.length>=2 && (argumentsList[1].referrerURI || argumentsList[1].spec || fromVimFx)) {
 					g.tabContainer.addEventListener('TabOpen', function onPreAddTabWithRef(event) {
 						g.tabContainer.removeEventListener('TabOpen', onPreAddTabWithRef, true);
 						let tab = event.target;
