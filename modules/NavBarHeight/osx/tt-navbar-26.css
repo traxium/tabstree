@@ -123,7 +123,7 @@ window:not([chromehidden~="toolbar"]) #urlbar-wrapper {
 		inset 0 0 1px hsla(0,0%,100%,.1),
 		0 1px 0 hsla(0,0%,100%,.2);
 	}
-	
+
 	#back-button:hover:active:not(:-moz-lwtheme),
 	#forward-button:hover:active:not(:-moz-lwtheme) {
 		/*background-image: linear-gradient(hsla(0,0%,60%,.37), hsla(0,0%,100%,.35) 95%);*/
@@ -132,7 +132,7 @@ window:not([chromehidden~="toolbar"]) #urlbar-wrapper {
 		inset 0 1px 2px hsla(0,0%,0%,.2),
 		0 1px 0 hsla(0,0%,100%,.2);
 	}
-	
+
 	#back-button:-moz-window-inactive:not(:-moz-lwtheme),
 	#forward-button:-moz-window-inactive:not(:-moz-lwtheme) {
 		/*background-image: none;*/
@@ -149,6 +149,11 @@ window:not([chromehidden~="toolbar"]) #urlbar-wrapper {
 #nav-bar .toolbarbutton-1:not(#back-button):not(#forward-button) {
 	margin-top: 0;
 	margin-bottom: 0;
+}
+
+#identity-box {
+	padding-top:0;
+	padding-bottom:0;
 }
 
 /* Back button left space */

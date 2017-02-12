@@ -8,6 +8,11 @@
 	padding-bottom: 1px;
 }
 
+#identity-box {
+	padding-top:0;
+	padding-bottom:0;
+}
+
 /* Back button */
 
 #back-button {

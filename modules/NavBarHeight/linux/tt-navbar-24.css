@@ -76,6 +76,11 @@ window:not([chromehidden~="toolbar"]) #urlbar-wrapper {
 	padding-left: 1px !important;
 }
 
+#identity-box {
+	padding-top:0;
+	padding-bottom:0;
+}
+
 /* 24px fix */
 
 .tab-background-start[visuallyselected=true]::after,

@@ -11,3 +11,8 @@
 #back-button {
 	margin-left: 0 !important;
 }
+
+#identity-box {
+	padding-top:0;
+	padding-bottom:0;
+}
